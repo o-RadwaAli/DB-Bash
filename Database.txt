@@ -1,0 +1,389 @@
+#! /usr/bin/bash
+shopt -s extglob
+
+#`mkdir ./Databases`
+#`touch ./tmp`
+
+function validateDataTypes
+{
+if [[ -z $(echo $1 | sed -e 's/[0-9]//g') ]]
+then
+        type="number"
+elif [[ -z $(echo $1 | sed -e 's/[A-Za-z]//g') ]]
+then
+        type="string"
+elif [[ -z $(echo $1 | sed -e 's/[A-Za-Z0-9]//g') ]]
+then
+        type="mix"
+fi
+
+if [ $type = $2 ]
+then return 1 ## correct type
+else
+return 0 ## incorrect type
+fi
+
+}
+
+function validateTableName
+{
+  if [ $(grep -cim1 $2 ./Databases/$1/AllTables) = 0 ]
+then return 0 ##invalid table name
+else
+return 1 ##valid 
+fi
+}
+
+function validatePK
+{
+cut -d, -f1 ./Databases/$1/$2 > ./Databases/$1/tmp
+
+if [ $(grep -cim1 $3 ./Databases/$1/tmp) = 0 ]
+then return 0 ##invalid pk 
+else
+return 1 ##valid 
+fi
+}
+
+select choice in "Create DB" "Use DB" "Delete DB" "List all DBs" "Exit SQL"
+do
+case $choice in 
+"Exit SQL")
+break;
+;;
+"Create DB") 
+echo "Enter DB name" 
+read createName 
+mkdir ./Databases/$createName
+`touch ./Databases/$createName/AllTables`
+echo "Database created "
+
+# Create tables 
+while true 
+do 
+echo "Enter table name "
+read tblName
+`touch ./Databases/$createName/$tblName` 
+tblMetadata=${tblName}Metadata
+touch ./Databases/$createName/$tblMetadata
+echo $tblName >> ./Databases/$createName/AllTables 
+echo "Enter number of columns"
+read colNum 
+i=1
+echo "ColName, DataType, PK?, unique, NotNull : " >> ./Databases/$createName/$tblMetadata
+
+# loop on number of col. 
+while [ $i -le $colNum ]
+do
+echo "enter name of column $i" 
+read colName
+echo "enter data type of column $i" 
+read colType
+echo "Is it a PK ? (y/n)"
+read pk
+echo "Is it unique ? (y/n)"
+read uk
+echo "Is it not null ? (y/n)"
+read notNull
+line=${colName}","${colType}","${pk}","${uk}","${notNull}" : "
+echo $line >> ./Databases/$createName/$tblMetadata
+let i=$i+1
+done
+echo "Do you want to create another table? (y/n)"
+read dec
+if [ $dec = n ] 
+then 
+break 
+fi
+done
+;;
+
+####################################################
+
+"Delete DB") 
+echo "Enter DB name"
+read delName
+echo "Are you sure you want to delete DB ? (y/n)"
+read d
+if [ $d = y ] 
+then  
+rm -rf ./Databases/$delName 
+echo "Database deleted "
+fi
+;;
+
+####################################################
+
+"List all DBs")
+ls -F ./Databases/ | grep "/";;
+
+####################################################
+
+"Use DB") 
+echo "Enter DB name"
+read useDB
+`ls -F ./Databases/ | grep "/" > ./Databases/tmp`
+
+while [ $(grep -cim1 $useDB ./Databases/tmp) = 0 ]
+do
+echo "db entered is " $useDB 
+echo "No such DB name,Try Again please.."
+read useDB
+done 
+
+select c in "Create table" "Delete table" "Display table" "Insert row" "Delete row" "Update row" "Describe table" "Exit database"
+do
+case $c in 
+
+### Create table ###
+"Create table")
+echo "Enter table name "
+read tblName
+touch ./Databases/$useDB/$tblName 
+tblMetadata=${tblName}Metadata
+touch ./Databases/$useDB/$tblMetadata
+echo $tblName >> ./Databases/$useDB/AllTables
+echo "Enter number of columns"
+read colNum 
+i=1
+echo "ColName, DataType, PK?, unique, NotNull : " >> ./Databases/$useDB/$tblMetadata
+# loop on number of col. 
+while [ $i -le $colNum ]
+do
+echo "enter name of column $i" 
+read colName
+echo "enter data type of column $i" 
+read colType
+echo "Is it a PK ? (y/n)"
+read pk
+echo "Is it unique ? (y/n)"
+read uk
+echo "Is it not null ? (y/n)"
+read notNull
+line=${colName}","${colType}","${pk}","${uk}","${notNull}" : "
+echo $line >> ./Databases/$useDB/$tblMetadata
+let i=$i+1
+done
+;;
+
+### Delete table ###
+"Delete table")
+echo "Enter table name "
+read tblName
+validateTableName "$useDB" "$tblName"
+#echo "result is " $?
+while [ $? = 0 ]
+do
+echo "No such Table name,Try Again please.."
+read tblName
+validateTableName "$useDB" "$tblName"
+done 
+echo "Are you sure you want to delete this table? (y/n)"
+read dec
+if [ $dec = y ] 
+then  
+rm -f ./Databases/$useDB/$tblName
+rm -f ./Databases/$useDB/${tblName}Metadata  
+awk -v var="${tblName}" '{if ($1 != var) print $1}' ./Databases/$useDB/AllTables > ./Databases/tmp 
+cat ./Databases/tmp > ./Databases/$useDB/AllTables 
+echo "Table deleted "
+fi 
+;;
+
+### DESC table ###
+"Describe table")
+echo "Enter table name"
+read tblName
+validateTableName "$useDB" "$tblName"
+while [ $? = 0 ]
+do
+echo "No such Table name,Try Again please.."
+read tblName
+validateTableName "$useDB" "$tblName"
+done 
+cat ./Databases/$useDB/${tblName}Metadata;;
+
+### Display table ###
+"Display table")
+echo "Enter table name "
+read tblName
+validateTableName "$useDB" "$tblName"
+while [ $? = 0 ]
+do
+echo "No such Table name,Try Again please.."
+read tblName
+validateTableName "$useDB" "$tblName"
+done 
+cat ./Databases/$useDB/$tblName
+echo 
+;;
+
+
+### Insert row ###
+"Insert row")
+
+echo "Enter table name "
+read tblName
+validateTableName "$useDB" "$tblName"
+while [ $? = 0 ]
+do
+echo "No such Table name,Try Again please.."
+read tblName
+validateTableName "$useDB" "$tblName"
+done 
+# cut column names and put in tmp
+cut -d, -f1 ./Databases/$useDB/${tblName}Metadata > ./Databases/$useDB/tmp
+# loop on col names 
+typeset -i i=1 
+for field in `tail -n +2 ./Databases/$useDB/tmp`
+do 
+mapfile -t dtypesarray < <( cut -d, -f2 ./Databases/$useDB/${tblName}Metadata )
+
+if [ $i = 1 ]; then 
+while [ true ] 
+do
+echo "Enter value for " $field
+read val 
+
+validateDataTypes "$val" "${dtypesarray[$i]}"
+while [ $? = 0 ]
+do
+echo "Invalid data type. Please enter a " ${dtypesarray[$i]} " type."
+read data
+validateDataTypes "$data" "${dtypesarray[$i]}"
+done
+
+# validate uniqueness of PK
+pk=$(cut -d, -f1 ./Databases/$useDB/$tblName | grep -cim1 $val)
+
+if [ $pk -ne 0 ]; 
+then
+echo "Duplicate value, Try another number"
+else
+echo -n ${val}", " >> ./Databases/$useDB/$tblName
+let i=$i+1
+break;
+fi # end of if pk
+done
+continue
+fi # end of $i=1 stat.
+
+echo "Enter value for " $field
+read val
+
+#echo "type is " ${dtypesarray[$i]}
+validateDataTypes "$val" "${dtypesarray[$i]}"
+
+while [ $? = 0 ]
+do
+echo "Invalid data type. Please enter a " ${dtypesarray[$i]} " type."
+read data
+validateDataTypes "$data" "${dtypesarray[$i]}"
+done
+
+echo -n ${data}", " >> ./Databases/$useDB/$tblName
+let i=$i+1
+done
+echo "" > ./Databases/$useDB/tmp
+echo ":" >> ./Databases/$useDB/$tblName
+cat ./Databases/$useDB/$tblName
+;;
+
+### Delete row ###
+"Delete row")
+echo "Enter table name "
+read tblName
+validateTableName "$useDB" "$tblName"
+while [ $? = 0 ]
+do
+echo "No such Table name,Try Again please.."
+read tblName
+validateTableName "$useDB" "$tblName"
+done 
+echo "Enter Row ID"
+read rowID
+
+#validate on rowid
+validatePK "$useDB" "$tblName" "$rowID"
+while [ $? = 0 ]
+do
+echo "Invalid primary key,Try Again please.."
+read rowID
+validatePK "$useDB" "$tblName" "$rowID"
+done 
+
+#echo "rowID is " $rowID
+sed "/$rowID/d" ./Databases/$useDB/$tblName > ./Databases/$useDB/tmp
+cat ./Databases/$useDB/tmp > ./Databases/$useDB/$tblName
+echo "" > ./Databases/$useDB/tmp
+echo "Data is currently :"
+cat ./Databases/$useDB/$tblName
+;;
+
+### Update row ###
+"Update row")
+echo "Enter table name "
+read tblName
+validateTableName "$useDB" "$tblName"
+while [ $? = 0 ]
+do
+echo "No such Table name,Try Again please.."
+read tblName
+validateTableName "$useDB" "$tblName"
+done 
+echo "Enter Row ID"
+read rowID
+
+#validate on rowid
+validatePK "$useDB" "$tblName" "$rowID"
+while [ $? = 0 ]
+do
+echo "Invalid primary key,Try Again please.."
+read rowID
+validatePK "$useDB" "$tblName" "$rowID"
+done 
+
+awk -v var="${rowID}" -F, '{if ( $1 == var ) print $0 }' ./Databases/$useDB/$tblName  > ./Databases/$useDB/tmp
+echo "Record is currently" 
+cut -d, -f1- ./Databases/$useDB/tmp
+echo "Enter the number of the column you want to update"
+
+read colNum
+numOfFields="$(awk -F, '{if (NR == 1) print NF }' ./Databases/$useDB/$tblName)"
+
+while [ $colNum -gt ${numOfFields} ]
+do 
+echo "Invalid column number, Please enter another number "
+read colNum
+done 
+ 
+echo "Enter new value"
+read newVal
+let rowNum=$colNum+1
+#echo "row number is " $rowNum " col number is " $colNum 
+
+dataType="$(awk -v rownumber="${rowNum}" -F, '{if (NR == rownumber)  print $2  }' ./Databases/$useDB/${tblName}Metadata)"
+
+validateDataTypes "$newVal" "${dataType}"
+while [ $? = 0 ]
+do
+echo "Invalid data type. Please enter a " ${dataType} " type."
+read newVal
+validateDataTypes "$newVal" "${dataType}"
+done
+
+awk -v var="${rowID}" -v num="${colNum}" -F, '{if ($1 == var && NF = num)  print $NF , NR  }' ./Databases/$useDB/$tblName | while read oldVal colNum
+do
+sed -i "${colNum}s/$oldVal/$newVal/" ./Databases/$useDB/$tblName
+done
+echo "Updated table : " 
+cat ./Databases/$useDB/$tblName
+;; 
+"Exit database")
+break;
+;;
+
+esac # end of inner case in use choice 
+done
+esac # end of outer case in the select choice
+done
